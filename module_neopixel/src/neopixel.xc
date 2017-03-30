@@ -12,7 +12,7 @@
 // neopixel_task - output driver for one neopixel strip
 //
 [[combinable]]
-void neopixel_task(port neo, static const uint32_t buf_size,
+void neopixel_task(out port neo, static const uint32_t buf_size,
                    uint32_t order, interface neopixel_if server dvr) {
     const uint32_t length = buf_size/3;
     uint8_t colors[buf_size];
@@ -23,6 +23,9 @@ void neopixel_task(port neo, static const uint32_t buf_size,
     for ( uint32_t loop=0; loop<(buf_size); ++loop ) {
         colors[loop] = 0;
     }
+
+    neo <: 0;
+    delay_ticks(buf_size * 8 * 125 + 50000);
 
     while( 1 ) {
         select {
@@ -78,19 +81,21 @@ void neopixel_task(port neo, static const uint32_t buf_size,
             // beginning of strip, sync counter
             uint32_t delay_count, bit;
             neo <: 0 @ delay_count;
+            delay_count += 125;
+            neo @ delay_count <: 0;
             #pragma unsafe arrays
             for (uint32_t index=0; index<buf_size; ++index) {
                 uint32_t color_shift = colors[index];
                 uint32_t bit_count = 8;
+                if (brightness) {
+                    color_shift = (brightness*color_shift)>>8;
+                }
                 while (bit_count--) {
                     // output low->high transition
                     delay_count += delay_third;
                     neo @ delay_count <: 1;
                     // output high->data transition
-                    if ( brightness && (7==bit_count) ) {
-                        color_shift = (brightness*color_shift)>>8;
-                    }
-                    bit = (color_shift & 0x80)? 1 : 0;
+                    bit = (color_shift & 0x80) ? 1 : 0;
                     color_shift <<=1;
                     delay_count += delay_first;
                     neo @ delay_count <: bit;

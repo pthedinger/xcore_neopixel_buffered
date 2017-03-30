@@ -46,7 +46,7 @@ interface neopixel_if {
     uint32_t numPixels(void);
 };
 
-[[combinable]] void neopixel_task(port neo,
+[[combinable]] void neopixel_task(out port neo,
         static const uint32_t buf_size,   // in bytes, 3 times the pixel count
         uint32_t order,
         interface neopixel_if server dvr);
