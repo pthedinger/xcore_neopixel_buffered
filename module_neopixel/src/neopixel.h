@@ -9,11 +9,6 @@
 // strip buffering
 #define PIXELS(x) ((x)*3)
 
-// ws2812b timing per uberguide, 10 nanosecond increments
-#define NEO_P1 40 // initial high time
-#define NEO_P2 40 // middle high/low data indicating time
-#define NEO_P3 45 // final low time
-
 // pixel wiring does vary
 #define NEO_GRB 0
 #define NEO_RGB 1
@@ -31,7 +26,7 @@ interface neopixel_if {
 
     // set scaling factor when buffer is displayed, 255 is full
     // this is non-destructive and does not change the buffer contents
-    void setBrightness(uint8_t bright);
+    void setBrightness(uint8_t brightness);
 
     // get the RGB 8:8:8 packed color for the given pixel
     uint32_t getPixelColor(uint32_t pixel);
