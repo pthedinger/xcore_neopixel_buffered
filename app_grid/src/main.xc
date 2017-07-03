@@ -128,7 +128,6 @@ void pattern_task(uint32_t taskID, interface neopixel_if client strip)
     }
 }
 
-
 int main() {
     interface neopixel_if neopixel_strip[8];
 

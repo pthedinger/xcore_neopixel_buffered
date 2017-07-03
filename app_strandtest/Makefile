@@ -10,7 +10,7 @@ TARGET = STARTKIT
 APP_NAME = app_strandtest
 
 # The USED_MODULES variable lists other module used by the application.
-USED_MODULES = module_neopixel
+USED_MODULES = 
 
 # The flags passed to xcc when building the application
 # You can also set the following to override flags for a particular language:
