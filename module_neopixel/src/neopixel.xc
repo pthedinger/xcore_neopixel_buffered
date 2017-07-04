@@ -7,24 +7,6 @@
 #include <stdint.h>
 #include "neopixel.h"
 
-#define SPEED_800KHZ 1
-
-#if SPEED_400KHZ
-#define T0H_TICKS 50
-#define T0L_TICKS 200
-#define T1H_TICKS 125
-#define T1L_TICKS 125
-#elif SPEED_800KHZ
-// This is not what the spec of the WS2811 datasheet says, but it seems to work
-// while the defined timings of 25/100 & 62/63 don't work at all
-#define T0H_TICKS 45
-#define T0L_TICKS 80
-#define T1H_TICKS 80
-#define T1L_TICKS 45
-#else
-#error "Must define either SPEED_800KHZ or SPEED_400KHZ"
-#endif
-
 #define MICROSECOND_TICKS 100
 
 // The reset code timing is 50us for the WS2811.

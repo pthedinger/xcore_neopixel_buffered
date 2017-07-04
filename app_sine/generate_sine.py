@@ -1,9 +1,9 @@
 import math
 
-num_cols = 100
+num_cols = 256
 
 ys = []
 for i in range(0,num_cols):
-	ys.append(int((math.sin(i* 2 * math.pi / num_cols) + 1) * 20))
+	ys.append(int( (math.sin(i* 2 * math.pi / num_cols) + 1)/2.0 * 255))
 
-print "{ %s }" % ", ".join([str(y) for y in ys])
+print "{ %s }" % ", ".join(["SCALE(%3d)" % y for y in ys])
