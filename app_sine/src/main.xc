@@ -8,11 +8,13 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
 #include "debug_print.h"
 #include "neogrid.h"
 
+#define TIMING 0
+
 #define MILLISECONDS_TICKS 100000
-#define NUM_COLORS (3*NUM_ROWS*NUM_COLS)
 
 out port p = XS1_PORT_1A;
 
@@ -23,10 +25,6 @@ typedef struct sine_state_t {
     uint8_t g;
     uint8_t b;
 } sine_state_t;
-
-typedef struct pixel_state_t {
-    int values[NUM_COLORS];
-} pixel_state_t;
 
 // #define DIV_FACTOR 100
 // #define PER_PIXEL_GAP 10
@@ -82,97 +80,13 @@ const uint8_t sine_table[SINE_TABLE_SIZE] = {
     SCALE(102), SCALE(105), SCALE(108), SCALE(111), SCALE(115), SCALE(118), SCALE(121), SCALE(124)
 };
 
-static inline void drive_0(out port neo, int &port_time)
-{
-    neo @ port_time <: 1;
-    port_time += T0H_TICKS;
-    neo @ port_time <: 0;
-    port_time += T0L_TICKS;
-}
-
-static inline void drive_1(out port neo, int &port_time)
-{
-    neo @ port_time <: 1;
-    port_time += T1H_TICKS;
-    neo @ port_time <: 0;
-    port_time += T1L_TICKS;
-}
-
-#pragma unsafe arrays
-void show(out port neo, uint8_t colors[])
-{
-    // Sync port timer
-    int port_time;
-    neo <: 0 @ port_time;
-
-    // Allow ticks to get from here to the first port drive
-    static const int loop_start_ticks = 125;
-    port_time += loop_start_ticks;
-
-    for (uint32_t index = 0; index < NUM_COLORS; ++index) {
-        uint32_t color = colors[index];
-        // if (brightness) {
-        //     color = (brightness*color)>>8;
-        // }
-
-        uint32_t bit_count = 8;
-        while (bit_count--) {
-            uint32_t bit = (color & 0x80) ? 1 : 0;
-            if (bit) {
-                drive_1(neo, port_time);
-            } else {
-                drive_0(neo, port_time);
-            }
-            color <<= 1;
-        }
-    }
-    // Hold last pixel
-    neo @ port_time <: 0;
-}
-
-static uint8_t saturate(int value) {
-    if (value < 0) {
-        return 0;
-    } else if (value > 255) {
-        return 255;
-    } else {
-        return value;
-    }
-}
-
-void update_strip(out port neo, pixel_state_t &pixels)
-{
-    uint8_t colors[NUM_COLORS];
-
-    for (size_t index = 0; index < sizeof colors; ++index) {
-        colors[index] = saturate(pixels.values[index]);
-    }
-    show(neo, colors);
-}
-
-void set_row_col_rgb(pixel_state_t &pixels,
-        size_t row, size_t col,
-        int r, int g, int b)
-{
-    const int odd_col = col & 0x1;
-    if (odd_col) {
-        row = (NUM_ROWS - 1) - row;
-    }
-    const size_t pixel = col * NUM_ROWS + row;
-
-    size_t index = 3*pixel;
-    pixels.values[index++] += r;
-    pixels.values[index++] += g;
-    pixels.values[index]   += b;
-}
-
-void interleave(pixel_state_t &pixels, size_t col, size_t pos, int r, int g, int b)
+static void interleave(pixel_state_t &pixels, size_t col, size_t pos, int r, int g, int b)
 {
     size_t row = pos / PER_PIXEL_GAP;
     size_t remainder = pos - (row * PER_PIXEL_GAP);
 
     if (remainder == 0) {
-        set_row_col_rgb(pixels, row, col, r, g, b);
+        pixel_set_row_col_rgb(pixels, row, col, r, g, b);
 
     } else {
         int scale1 = (DIV_FACTOR*(PER_PIXEL_GAP - remainder)) / PER_PIXEL_GAP;
@@ -182,12 +96,12 @@ void interleave(pixel_state_t &pixels, size_t col, size_t pos, int r, int g, int
         scale1 /= 2;
         scale2 /= 2;
 
-        set_row_col_rgb(pixels, row, col, (scale1*r)/DIV_FACTOR, (scale1*g)/DIV_FACTOR, (scale1*b)/DIV_FACTOR);
-        set_row_col_rgb(pixels, row+1, col, (scale2*r)/DIV_FACTOR, (scale2*g)/DIV_FACTOR, (scale2*b)/DIV_FACTOR);
+        pixel_set_row_col_rgb(pixels, row, col, (scale1*r)/DIV_FACTOR, (scale1*g)/DIV_FACTOR, (scale1*b)/DIV_FACTOR);
+        pixel_set_row_col_rgb(pixels, row+1, col, (scale2*r)/DIV_FACTOR, (scale2*g)/DIV_FACTOR, (scale2*b)/DIV_FACTOR);
     }
 }
 
-void apply_sine(pixel_state_t &pixels, sine_state_t &s, int mult)
+static void apply_sine(pixel_state_t &pixels, sine_state_t &s)
 {
     for (size_t col = 0; col < NUM_COLS; ++col) {
         // Start with the colums spread out across the sine wave
@@ -197,55 +111,72 @@ void apply_sine(pixel_state_t &pixels, sine_state_t &s, int mult)
         // Compute an index in the table
         index %= SINE_TABLE_SIZE;
 
-        interleave(pixels, col, sine_table[index],
-            ((int)s.r) * mult, ((int)s.g) * mult, ((int)s.b) * mult);
+        interleave(pixels, col, sine_table[index], s.r, s.g, s.b);
     }
+    s.pos += s.dir_speed;
 }
 
-void step_sine(sine_state_t &sine)
+static void pattern_task(out port neo)
 {
-    sine.pos += sine.dir_speed;
-}
+    #if TIMING
+    timer perf_tmr;
+    int start_time = 0, end_time = 0;
+    perf_tmr :> start_time;
+    #endif
 
-void pattern_task(uint32_t taskID, out port neo)
-{
     sine_state_t sines[] = {
-        // {0, 1, 0xff, 0x00, 0x00},
-        // {0, -1, 0x00, 0xff, 0x00},
-        {0, 4, 0x00, 0x00, 0xff}
+        {0, 1, 0x00, 0x00, 0xff},
+        {0, 2, 0x00, 0xff, 0x00},
+        {0, 3, 0xff, 0x00, 0x00},
     };
 
-    pixel_state_t pixels = {{0}};
+    pixel_state_t pixels = {256, {0}};
+
+    // Allow the brightness to go down & up
+    int brightness_delta = -1;
 
     const size_t num_sines = sizeof(sines) / sizeof(sines[0]);
 
     timer tmr;
-    int time;
+    int time = 0;
     tmr :> time;
     while(1) {
+        // Zero the entire pixel array
+        memset(&pixels.values, 0, sizeof(pixels.values));
+
+        // Render the sines
         for (size_t i = 0; i < num_sines; ++i) {
-            // Render each sine
-            apply_sine(pixels, sines[i], 1);
+            apply_sine(pixels, sines[i]);
         }
+
+        #if TIMING
+        perf_tmr :> end_time;
+        debug_printf("Loop %d\n", end_time - start_time);
+        #endif
 
         tmr when timerafter(time) :> void;
-        update_strip(neo, pixels);
+        pixel_update_strip(neo, pixels);
+
+        #if TIMING
+        perf_tmr :> start_time;
+        #endif
+
         time += 10 * MILLISECONDS_TICKS;
 
-        for (size_t i = 0; i < num_sines; ++i) {
-            // Clear the effects of applying the sines
-            apply_sine(pixels, sines[i], -1);
-        }
-
-        for (size_t i = 0; i < num_sines; ++i) {
-            step_sine(sines[i]);
+        pixels.brightness += brightness_delta;
+        if (pixels.brightness <= 0) {
+            brightness_delta = 1;
+            pixels.brightness = 0;
+        } else if (pixels.brightness >= 256) {
+            brightness_delta = -1;
+            pixels.brightness = 256;
         }
     }
 }
 
 int main() {
     par {
-      pattern_task(0, p);
+      pattern_task(p);
     }
 
     return 0;
