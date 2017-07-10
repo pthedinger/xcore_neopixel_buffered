@@ -22,6 +22,7 @@ typedef struct star_state_t {
     int dir_speed;
     int refresh_divider;
     int divide_count;
+    int size;
     uint8_t r;
     uint8_t g;
     uint8_t b;
@@ -30,20 +31,25 @@ typedef struct star_state_t {
 
 static void randomize_star(grid_state_t &grid, star_state_t &s, random_generator_t &rand)
 {
-    if ((random_get_random_number(rand) & 0xf) == 0) {
-        // The range of valid values is [0-max_x] inclusive
-        s.pos_x = random_get_random_number(rand) % (grid.max_x + 1);
-        s.pos_y = random_get_random_number(rand) % (grid.max_y + 1);
-    } else {
-        // Choose a position on a line
-        s.pos_x = (random_get_random_number(rand) % grid.num_cols) * (1 << grid.points_per_gap_x_log2);
-        s.pos_y = (random_get_random_number(rand) % grid.num_rows) * (1 << grid.points_per_gap_y_log2);
-    }
+    s.pos_x = random_get_random_number(rand) % grid.num_cols;
+    s.pos_y = random_get_random_number(rand) % grid.num_rows;
+
     // Always start it off
     s.brightness = 0;
     // Choosing a random speed of fading (ensuring they don't get stuck off)
     s.dir_speed = (random_get_random_number(rand) & 0x3) + 1;
     s.refresh_divider = (random_get_random_number(rand) & 0x3) + 5;
+
+    int size_choice = random_get_random_number(rand) & 0xff;
+    if (size_choice > 250) {
+        s.size = 4;
+    } else if (size_choice > 230) {
+        s.size = 3;
+    } else if (size_choice > 200) {
+        s.size = 2;
+    } else {
+        s.size = 1;
+    }
 
     s.r = random_get_random_number(rand);
     s.g = random_get_random_number(rand);
@@ -52,46 +58,27 @@ static void randomize_star(grid_state_t &grid, star_state_t &s, random_generator
 
 static void apply_star(grid_state_t &grid, star_state_t &s)
 {
-    size_t row = 0;
-    size_t col = 0;
-    size_t scale0_x = 0;
-    size_t scale1_x = 0;
-    size_t scale0_y = 0;
-    size_t scale1_y = 0;
-    linear_interpolation(s.pos_x, grid.points_per_gap_x_log2, &col, &scale0_x, &scale1_x);
-    linear_interpolation(s.pos_y, grid.points_per_gap_y_log2, &row, &scale0_y, &scale1_y);
+    int r = ((int)s.r * s.brightness) >> 8;
+    int g = ((int)s.g * s.brightness) >> 8;
+    int b = ((int)s.b * s.brightness) >> 8;
 
-    const size_t scale = SCALE_FACTOR_LOG2 * 2;
-    const size_t scale_00 = scale0_x * scale0_y;
-    const size_t scale_01 = scale0_x * scale1_y;
-    const size_t scale_10 = scale1_x * scale0_y;
-    const size_t scale_11 = scale1_x * scale1_y;
-    const int r = ((int)s.r * s.brightness) >> 8;
-    const int g = ((int)s.g * s.brightness) >> 8;
-    const int b = ((int)s.b * s.brightness) >> 8;
-
-    pixel_set_col_row_rgb(&grid, col, row,
-        (scale_00 * r) >> scale,
-        (scale_00 * g) >> scale,
-        (scale_00 * b) >> scale);
-
-    if (scale_01) {
-        pixel_set_col_row_rgb(&grid, col, row+1,
-            (scale_01 * r) >> scale,
-            (scale_01 * g) >> scale,
-            (scale_01 * b) >> scale);
-    }
-    if (scale_10) {
-        pixel_set_col_row_rgb(&grid, col+1, row,
-            (scale_10 * r) >> scale,
-            (scale_10 * g) >> scale,
-            (scale_10 * b) >> scale);
-    }
-    if (scale_11) {
-        pixel_set_col_row_rgb(&grid, col+1, row+1,
-            (scale_11 * r) >> scale,
-            (scale_11 * g) >> scale,
-            (scale_11 * b) >> scale);
+    pixel_set_col_row_rgb(&grid, s.pos_x, s.pos_y, r, g, b);
+    for (int distance = 1; distance < s.size; ++distance) {
+        r = r >> 2;
+        g = g >> 2;
+        b = b >> 2;
+        if (s.pos_x >= distance) {
+            pixel_set_col_row_rgb(&grid, s.pos_x-distance, s.pos_y, r, g, b);
+        }
+        if (s.pos_y >= distance) {
+            pixel_set_col_row_rgb(&grid, s.pos_x, s.pos_y-distance, r, g, b);
+        }
+        if ((s.pos_x + distance) < grid.num_cols) {
+            pixel_set_col_row_rgb(&grid, s.pos_x+distance, s.pos_y, r, g, b);
+        }
+        if ((s.pos_y + distance) < grid.num_rows) {
+            pixel_set_col_row_rgb(&grid, s.pos_x, s.pos_y+distance, r, g, b);
+        }
     }
 
     // Allow the sine wave to move at a fraction of the refresh speed
@@ -128,14 +115,14 @@ static void pattern_task(out port neo,
     random_generator_t rand = random_create_generator_from_hw_seed();
 
     star_state_t stars[] = {
-        {0, 0, 256, -1, 1, 0, 0xff, 0xff, 0xff},
-        {0, 0, 256, -1, 1, 0, 0xff, 0xff, 0xff},
-        {0, 0, 256, -1, 1, 0, 0xff, 0xff, 0xff},
-        {0, 0, 256, -1, 1, 0, 0xff, 0xff, 0xff},
-        {0, 0, 256, -1, 1, 0, 0xff, 0xff, 0xff},
-        {0, 0, 256, -1, 1, 0, 0xff, 0xff, 0xff},
-        {0, 0, 256, -1, 1, 0, 0xff, 0xff, 0xff},
-        {0, 0, 256, -1, 1, 0, 0xff, 0xff, 0xff},
+        {0, 0, 256, -1, 1, 0, 1, 0xff, 0xff, 0xff},
+        {0, 0, 256, -1, 1, 0, 1, 0xff, 0xff, 0xff},
+        {0, 0, 256, -1, 1, 0, 1, 0xff, 0xff, 0xff},
+        {0, 0, 256, -1, 1, 0, 1, 0xff, 0xff, 0xff},
+        {0, 0, 256, -1, 1, 0, 1, 0xff, 0xff, 0xff},
+        {0, 0, 256, -1, 1, 0, 1, 0xff, 0xff, 0xff},
+        {0, 0, 256, -1, 1, 0, 1, 0xff, 0xff, 0xff},
+        {0, 0, 256, -1, 1, 0, 1, 0xff, 0xff, 0xff},
     };
 
     const size_t num_stars = sizeof(stars) / sizeof(stars[0]);
