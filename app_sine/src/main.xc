@@ -13,111 +13,105 @@
 #include "neogrid.h"
 
 #define TIMING 0
-
-#define MILLISECONDS_TICKS 100000
+#define VERBOSE 0
 
 out port p = XS1_PORT_1A;
 
 typedef struct sine_state_t {
     int pos;
     int dir_speed;
+    int refresh_divider;
+    int divide_count;
     uint8_t r;
     uint8_t g;
     uint8_t b;
 } sine_state_t;
 
-// #define DIV_FACTOR 100
-// #define PER_PIXEL_GAP 10
-// #define MAX_Y (((NUM_ROWS) - 1) * PER_PIXEL_GAP)
-
-// // A pre-computed table with sine values
-// #define SINE_TABLE_SIZE 100
-// const uint8_t sine_table[SINE_TABLE_SIZE] = {
-//      20, 21, 22, 23, 24, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 36, 37, 38, 38,
-//      39, 39, 39, 39, 39, 40, 39, 39, 39, 39, 39, 38, 38, 37, 36, 36, 35, 34, 33, 32,
-//      31, 30, 29, 28, 27, 26, 24, 23, 22, 21, 20, 18, 17, 16, 15, 13, 12, 11, 10,  9,
-//       8,  7,  6,  5,  4,  3,  3,  2,  1,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-//       0,  1,  1,  2,  3,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 15, 16, 17, 18
-// };
-#define PER_PIXEL_GAP 16
-#define DIV_FACTOR 256
-#define MAX_Y (((NUM_ROWS) - 1) * PER_PIXEL_GAP)
-
-#define SCALE(x) ((x*MAX_Y) / 256)
 #define SINE_TABLE_SIZE 256
-const uint8_t sine_table[SINE_TABLE_SIZE] = {
-    SCALE(127), SCALE(130), SCALE(133), SCALE(136), SCALE(139), SCALE(143), SCALE(146), SCALE(149),
-    SCALE(152), SCALE(155), SCALE(158), SCALE(161), SCALE(164), SCALE(167), SCALE(170), SCALE(173),
-    SCALE(176), SCALE(179), SCALE(182), SCALE(184), SCALE(187), SCALE(190), SCALE(193), SCALE(195),
-    SCALE(198), SCALE(200), SCALE(203), SCALE(205), SCALE(208), SCALE(210), SCALE(213), SCALE(215),
-    SCALE(217), SCALE(219), SCALE(221), SCALE(224), SCALE(226), SCALE(228), SCALE(229), SCALE(231),
-    SCALE(233), SCALE(235), SCALE(236), SCALE(238), SCALE(239), SCALE(241), SCALE(242), SCALE(244),
-    SCALE(245), SCALE(246), SCALE(247), SCALE(248), SCALE(249), SCALE(250), SCALE(251), SCALE(251),
-    SCALE(252), SCALE(253), SCALE(253), SCALE(254), SCALE(254), SCALE(254), SCALE(254), SCALE(254),
-    SCALE(255), SCALE(254), SCALE(254), SCALE(254), SCALE(254), SCALE(254), SCALE(253), SCALE(253),
-    SCALE(252), SCALE(251), SCALE(251), SCALE(250), SCALE(249), SCALE(248), SCALE(247), SCALE(246),
-    SCALE(245), SCALE(244), SCALE(242), SCALE(241), SCALE(239), SCALE(238), SCALE(236), SCALE(235),
-    SCALE(233), SCALE(231), SCALE(229), SCALE(228), SCALE(226), SCALE(224), SCALE(221), SCALE(219),
-    SCALE(217), SCALE(215), SCALE(213), SCALE(210), SCALE(208), SCALE(205), SCALE(203), SCALE(200),
-    SCALE(198), SCALE(195), SCALE(193), SCALE(190), SCALE(187), SCALE(184), SCALE(182), SCALE(179),
-    SCALE(176), SCALE(173), SCALE(170), SCALE(167), SCALE(164), SCALE(161), SCALE(158), SCALE(155),
-    SCALE(152), SCALE(149), SCALE(146), SCALE(143), SCALE(139), SCALE(136), SCALE(133), SCALE(130),
-    SCALE(127), SCALE(124), SCALE(121), SCALE(118), SCALE(115), SCALE(111), SCALE(108), SCALE(105),
-    SCALE(102), SCALE( 99), SCALE( 96), SCALE( 93), SCALE( 90), SCALE( 87), SCALE( 84), SCALE( 81),
-    SCALE( 78), SCALE( 75), SCALE( 72), SCALE( 70), SCALE( 67), SCALE( 64), SCALE( 61), SCALE( 59),
-    SCALE( 56), SCALE( 54), SCALE( 51), SCALE( 49), SCALE( 46), SCALE( 44), SCALE( 41), SCALE( 39),
-    SCALE( 37), SCALE( 35), SCALE( 33), SCALE( 30), SCALE( 28), SCALE( 26), SCALE( 25), SCALE( 23),
-    SCALE( 21), SCALE( 19), SCALE( 18), SCALE( 16), SCALE( 15), SCALE( 13), SCALE( 12), SCALE( 10),
-    SCALE(  9), SCALE(  8), SCALE(  7), SCALE(  6), SCALE(  5), SCALE(  4), SCALE(  3), SCALE(  3),
-    SCALE(  2), SCALE(  1), SCALE(  1), SCALE(  0), SCALE(  0), SCALE(  0), SCALE(  0), SCALE(  0),
-    SCALE(  0), SCALE(  0), SCALE(  0), SCALE(  0), SCALE(  0), SCALE(  0), SCALE(  1), SCALE(  1),
-    SCALE(  2), SCALE(  3), SCALE(  3), SCALE(  4), SCALE(  5), SCALE(  6), SCALE(  7), SCALE(  8),
-    SCALE(  9), SCALE( 10), SCALE( 12), SCALE( 13), SCALE( 15), SCALE( 16), SCALE( 18), SCALE( 19),
-    SCALE( 21), SCALE( 23), SCALE( 25), SCALE( 26), SCALE( 28), SCALE( 30), SCALE( 33), SCALE( 35),
-    SCALE( 37), SCALE( 39), SCALE( 41), SCALE( 44), SCALE( 46), SCALE( 49), SCALE( 51), SCALE( 54),
-    SCALE( 56), SCALE( 59), SCALE( 61), SCALE( 64), SCALE( 67), SCALE( 70), SCALE( 72), SCALE( 75),
-    SCALE( 78), SCALE( 81), SCALE( 84), SCALE( 87), SCALE( 90), SCALE( 93), SCALE( 96), SCALE( 99),
-    SCALE(102), SCALE(105), SCALE(108), SCALE(111), SCALE(115), SCALE(118), SCALE(121), SCALE(124)
+const uint16_t sine_table[SINE_TABLE_SIZE] = {
+    1152, 1180, 1208, 1236, 1264, 1293, 1321, 1348,
+    1376, 1404, 1431, 1459, 1486, 1513, 1540, 1566,
+    1592, 1618, 1644, 1669, 1695, 1719, 1744, 1768,
+    1792, 1815, 1838, 1860, 1882, 1904, 1925, 1946,
+    1966, 1986, 2005, 2024, 2042, 2060, 2077, 2093,
+    2109, 2125, 2140, 2154, 2167, 2180, 2193, 2205,
+    2216, 2226, 2236, 2245, 2254, 2262, 2269, 2276,
+    2281, 2287, 2291, 2295, 2298, 2300, 2302, 2303,
+    2304, 2303, 2302, 2300, 2298, 2295, 2291, 2287,
+    2281, 2276, 2269, 2262, 2254, 2245, 2236, 2226,
+    2216, 2205, 2193, 2180, 2167, 2154, 2140, 2125,
+    2109, 2093, 2077, 2060, 2042, 2024, 2005, 1986,
+    1966, 1946, 1925, 1904, 1882, 1860, 1838, 1815,
+    1792, 1768, 1744, 1719, 1695, 1669, 1644, 1618,
+    1592, 1566, 1540, 1513, 1486, 1459, 1431, 1404,
+    1376, 1348, 1321, 1293, 1264, 1236, 1208, 1180,
+    1152, 1123, 1095, 1067, 1039, 1010,  982,  955,
+     927,  899,  872,  844,  817,  790,  763,  737,
+     711,  685,  659,  634,  608,  584,  559,  535,
+     511,  488,  465,  443,  421,  399,  378,  357,
+     337,  317,  298,  279,  261,  243,  226,  210,
+     194,  178,  163,  149,  136,  123,  110,   98,
+      87,   77,   67,   58,   49,   41,   34,   27,
+      22,   16,   12,    8,    5,    3,    1,    0,
+       0,    0,    1,    3,    5,    8,   12,   16,
+      22,   27,   34,   41,   49,   58,   67,   77,
+      87,   98,  110,  123,  136,  149,  163,  178,
+     194,  210,  226,  243,  261,  279,  298,  317,
+     337,  357,  378,  399,  421,  443,  465,  488,
+     511,  535,  559,  584,  608,  634,  659,  685,
+     711,  737,  763,  790,  817,  844,  872,  899,
+     927,  955,  982, 1010, 1039, 1067, 1095, 1123
 };
 
-static void interleave(pixel_state_t &pixels, size_t col, size_t pos, int r, int g, int b)
+static void apply_sine(grid_state_t &grid, sine_state_t &s)
 {
-    size_t row = pos / PER_PIXEL_GAP;
-    size_t remainder = pos - (row * PER_PIXEL_GAP);
-
-    if (remainder == 0) {
-        pixel_set_row_col_rgb(pixels, row, col, r, g, b);
-
-    } else {
-        int scale1 = (DIV_FACTOR*(PER_PIXEL_GAP - remainder)) / PER_PIXEL_GAP;
-        int scale2 = DIV_FACTOR - scale1;
-
-        // Divide the color by 2 as the brightness scaling is not very linear
-        scale1 /= 2;
-        scale2 /= 2;
-
-        pixel_set_row_col_rgb(pixels, row, col, (scale1*r)/DIV_FACTOR, (scale1*g)/DIV_FACTOR, (scale1*b)/DIV_FACTOR);
-        pixel_set_row_col_rgb(pixels, row+1, col, (scale2*r)/DIV_FACTOR, (scale2*g)/DIV_FACTOR, (scale2*b)/DIV_FACTOR);
-    }
-}
-
-static void apply_sine(pixel_state_t &pixels, sine_state_t &s)
-{
-    for (size_t col = 0; col < NUM_COLS; ++col) {
+    for (size_t col = 0; col < grid.num_cols; ++col) {
         // Start with the colums spread out across the sine wave
-        size_t index = (col * SINE_TABLE_SIZE)/NUM_COLS;
+        size_t index = (col * SINE_TABLE_SIZE)/grid.num_cols;
         index += s.pos;
 
         // Compute an index in the table
         index %= SINE_TABLE_SIZE;
 
-        interleave(pixels, col, sine_table[index], s.r, s.g, s.b);
+        size_t row = 0;
+        size_t scale1 = 0;
+        size_t scale2 = 0;
+        linear_interpolation(sine_table[index], grid.points_per_gap_y_log2, &row, &scale1, &scale2);
+        pixel_set_col_row_rgb(&grid, col, row,
+            (scale1*s.r) >> SCALE_FACTOR_LOG2,
+            (scale1*s.g) >> SCALE_FACTOR_LOG2,
+            (scale1*s.b) >> SCALE_FACTOR_LOG2);
+        if (scale2) {
+            pixel_set_row_col_rgb(&grid, row+1, col,
+                (scale2*s.r) >> SCALE_FACTOR_LOG2,
+                (scale2*s.g) >> SCALE_FACTOR_LOG2,
+                (scale2*s.b) >> SCALE_FACTOR_LOG2);
+        }
     }
-    s.pos += s.dir_speed;
+
+    // Allow the sine wave to move at a fraction of the refresh speed
+    if (s.divide_count) {
+        s.divide_count -= 1;
+    } else {
+        s.pos += s.dir_speed;
+        s.divide_count = s.refresh_divider;
+    }
 }
 
-static void pattern_task(out port neo)
+// Pre-compute num_colors in order to work around the fact that the
+// compiler won't allow a structure to be declared as an expression
+#define GRID(cols, rows) (cols), (rows), (3*(cols)*(rows))
+
+static void pattern_task(out port neo,
+        static const size_t num_cols,
+        static const size_t num_rows,
+        static const size_t num_colors)
 {
+    int colors[num_colors] = {0};
+    uint8_t saturated_colors[num_colors] = {0};
+    grid_state_t grid;
+    grid_init(&grid, num_cols, 8, num_rows, 8, 256, colors, saturated_colors);
+
     #if TIMING
     timer perf_tmr;
     int start_time = 0, end_time = 0;
@@ -125,12 +119,11 @@ static void pattern_task(out port neo)
     #endif
 
     sine_state_t sines[] = {
-        {0, 1, 0x00, 0x00, 0xff},
-        {0, 2, 0x00, 0xff, 0x00},
-        {0, 3, 0xff, 0x00, 0x00},
+        // {0, 1, 3, 0, 0x00, 0x00, 0xff},
+        // {0, 2, 3, 0, 0x00, 0xff, 0x00},
+        // {0, 3, 3, 0, 0xff, 0x00, 0x00},
+        {0, 2, 1, 0, 0xff, 0xff, 0xff},
     };
-
-    pixel_state_t pixels = {256, {0}};
 
     // Allow the brightness to go down & up
     int brightness_delta = -1;
@@ -140,13 +133,12 @@ static void pattern_task(out port neo)
     timer tmr;
     int time = 0;
     tmr :> time;
-    while(1) {
-        // Zero the entire pixel array
-        memset(&pixels.values, 0, sizeof(pixels.values));
+    for (size_t iter = 0; ; ++iter) {
+        grid_reset_colors(&grid);
 
         // Render the sines
         for (size_t i = 0; i < num_sines; ++i) {
-            apply_sine(pixels, sines[i]);
+            apply_sine(grid, sines[i]);
         }
 
         #if TIMING
@@ -155,28 +147,33 @@ static void pattern_task(out port neo)
         #endif
 
         tmr when timerafter(time) :> void;
-        pixel_update_strip(neo, pixels);
+        pixel_update_strip(neo, grid);
+        tmr :> time;
 
         #if TIMING
         perf_tmr :> start_time;
         #endif
 
-        time += 10 * MILLISECONDS_TICKS;
+        // Refresh rate limited to 500 frames per second
+        time += MILLISECONDS_TICKS/10;
 
-        pixels.brightness += brightness_delta;
-        if (pixels.brightness <= 0) {
-            brightness_delta = 1;
-            pixels.brightness = 0;
-        } else if (pixels.brightness >= 256) {
-            brightness_delta = -1;
-            pixels.brightness = 256;
+        if ((iter & 0x7) == 0) {
+            grid.brightness += brightness_delta;
+            // Never let it go completely black (<=1)
+            if (grid.brightness <= 1) {
+                brightness_delta = 1;
+                grid.brightness = 1;
+            } else if (grid.brightness >= 256) {
+                brightness_delta = -1;
+                grid.brightness = 256;
+            }
         }
     }
 }
 
 int main() {
     par {
-      pattern_task(p);
+      pattern_task(p, GRID(10, 10));
     }
 
     return 0;

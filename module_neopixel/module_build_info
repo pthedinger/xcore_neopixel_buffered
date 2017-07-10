@@ -1,8 +1,10 @@
 # You can set flags specifically for your module by using the MODULE_XCC_FLAGS
 # variable. So the following
 #
-MODULE_XCC_FLAGS = $(XCC_FLAGS) -O3
+MODULE_XCC_FLAGS = $(XCC_FLAGS) -O3 -g
 #
 # specifies that everything in the modules should have the application
 # build flags with -O3 appended (so the files will build at
 # optimization level -O3).
+
+DEPENDENT_MODULES = lib_logging(>=2.1.0)

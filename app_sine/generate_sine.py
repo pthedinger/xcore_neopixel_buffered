@@ -1,9 +1,11 @@
 import math
 
-num_cols = 256
+num_colors = 256
+num_gaps = 9
+gap_size = 256
 
 ys = []
-for i in range(0,num_cols):
-	ys.append(int( (math.sin(i* 2 * math.pi / num_cols) + 1)/2.0 * 255))
+for i in range(0,num_colors):
+	ys.append(int( (math.sin(i* 2 * math.pi / num_colors) + 1)/2.0 * gap_size * num_gaps))
 
-print "{ %s }" % ", ".join(["SCALE(%3d)" % y for y in ys])
+print "{ %s }" % ", ".join(["%4d" % y for y in ys])
