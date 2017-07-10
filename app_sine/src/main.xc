@@ -82,7 +82,7 @@ static void apply_sine(grid_state_t &grid, sine_state_t &s)
             (scale1*s.g) >> SCALE_FACTOR_LOG2,
             (scale1*s.b) >> SCALE_FACTOR_LOG2);
         if (scale2) {
-            pixel_set_row_col_rgb(&grid, row+1, col,
+            pixel_set_col_row_rgb(&grid, col, row+1,
                 (scale2*s.r) >> SCALE_FACTOR_LOG2,
                 (scale2*s.g) >> SCALE_FACTOR_LOG2,
                 (scale2*s.b) >> SCALE_FACTOR_LOG2);
