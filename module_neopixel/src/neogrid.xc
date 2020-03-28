@@ -56,19 +56,26 @@ static void show(out port neo, grid_state_t &grid)
         static const int loop_start_ticks = 125;
         port_time += loop_start_ticks;
 
-        const size_t num_colors = grid_num_colors(&grid);
-        for (size_t index = 0; index < num_colors; ++index) {
-            uint32_t color = grid.saturated_colors[index];
+        const size_t num_pixels = grid.num_cols * grid.num_rows;
+        for (size_t i = 0; i < num_pixels; ++i) {
+            // Need to iterate through the pixels in reverse order
+            size_t pixel_index = (num_pixels - i - 1);
+            // There are 3 colors per pixel
+            pixel_index *= 3;
 
-            uint32_t bit_count = 8;
-            while (bit_count--) {
-                uint32_t bit = (color & 0x80) ? 1 : 0;
-                if (bit) {
-                    drive_1(neo, port_time);
-                } else {
-                    drive_0(neo, port_time);
+            for (size_t color = 0; color < 3; ++color) {
+                uint32_t color = grid.saturated_colors[pixel_index + color];
+
+                uint32_t bit_count = 8;
+                while (bit_count--) {
+                    uint32_t bit = (color & 0x80) ? 1 : 0;
+                    if (bit) {
+                        drive_1(neo, port_time);
+                    } else {
+                        drive_0(neo, port_time);
+                    }
+                    color <<= 1;
                 }
-                color <<= 1;
             }
         }
         // Hold last pixel
