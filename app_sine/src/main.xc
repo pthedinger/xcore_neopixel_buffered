@@ -155,7 +155,7 @@ static void pattern_task(out port neo,
         #endif
 
         // Refresh rate limited to 500 frames per second
-        time += MILLISECONDS_TICKS/10;
+        time += 10 * MILLISECONDS_TICKS/10;
 
         if ((iter & 0x7) == 0) {
             grid.brightness += brightness_delta;
